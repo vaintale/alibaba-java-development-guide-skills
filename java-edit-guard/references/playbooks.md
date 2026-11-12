@@ -163,8 +163,16 @@
 
 ### 改法要点
 
-- 线程池必须 `new ThreadPoolExecutor(...)` 显式参数，并给线程命名（`01-(七)4`、`01-(七)2`）。
-- 队列必须有界；拒绝策略按业务选：`CallerRunsPolicy`（降级为同步）、`AbortPolicy`（快速失败）。
+- 线程池一律 `new ThreadPoolExecutor(...)` 显式参数，并给线程命名（`01-(七)4`、`01-(七)2`）。`Executors` 的任何工厂方法都算违规，`newScheduledThreadPool`、`newWorkStealingPool` 也在内。
+- 参数取值按下面这张表定，不要拍脑袋：
+
+| 参数 | 取值依据 |
+|---|---|
+| 核心数 | CPU 密集型 ≈ 核数 + 1；IO 密集型 ≈ 核数 × (1 + 平均等待/平均计算)，常从 2×核数 起 |
+| 最大数 | 与核心数相同（固定大小）行为最可预期；要弹性再放大，并接受线程数波动 |
+| 队列 | **必须有界**，容量按「峰值 QPS × 可接受积压时长」估，不要用 `Integer.MAX_VALUE` |
+| 拒绝策略 | 不能丢任务 → `CallerRunsPolicy`（回落到提交线程，天然限流）；允许快速失败 → `AbortPolicy` + 上游捕获 |
+| 线程名 | 业务前缀 + 自增序号；`ThreadFactory` 里 `new Thread(runnable, name)` 是正当写法，不算裸建线程 |
 - `ThreadLocal` 在子线程中不继承，需 `InheritableThreadLocal` 或显式透传；用完 `remove()`（`01-(七)6`）。
 - 锁粒度：能锁代码块不锁方法，能用对象锁不用类锁（`01-(七)7`）；多资源加锁顺序一致（`01-(七)8`）。
 - 加锁代码必须在 `try` 之外获取锁，避免 finally 解锁失败（`01-(七)9`）。
@@ -180,7 +188,7 @@
 
 ### 收尾检查
 
-- [ ] 无 `Executors.new*`、无裸 `new Thread`
+- [ ] 无 `Executors.new*`、无 `new Thread(...).start()`
 - [ ] 线程池有界队列 + 命名 + 明确拒绝策略
 - [ ] `ThreadLocal` 有配对 `remove()`
 - [ ] 异步路径的异常有日志

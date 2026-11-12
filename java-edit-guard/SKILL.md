@@ -1,34 +1,37 @@
 ---
 name: java-edit-guard
-description: 修改现有 Java 代码时的作业协议（不是从零写代码的教程）。核心是控制编辑半径、保住既有契约、让 diff 可评审：改前读全文并 grep 调用方，改中最小 diff 且不动无关风格，改后编译/测试并给四段交付说明。Use when editing, patching, refactoring, fixing, or adding features to existing Java code — Controller / Service / Manager / DAO / Mapper / DTO-VO / 线程池 / 事务 / SQL / 单元测试，或用户说「改一下 / 加个参数 / 修个 bug / 优化这段 / 帮我 review 这个类」。红线（被本次改动触碰到的范围内发现即修，不接受口头豁免）：禁 Executors.newFixedThreadPool/newCachedThreadPool 建池（须 new ThreadPoolExecutor 显式参数）、禁裸 new Thread、SimpleDateFormat 不得作 static 共享（用 java.time）、ThreadLocal 用后必须 remove、SQL 禁 ${} 拼接、catch 后不得吞异常、事务异常须回滚、资源须关闭、禁 finally 中 return、数据订正先 select、禁物理删除。另：禁整文件格式化、禁重排 import、禁重命名本次未改到的标识符——这些是 diff 噪声，视为违规。
+description: 在既有 Java 工程里改代码、加业务的作业协议（不是从零起项目的教程）。覆盖两类任务：修改存量代码（改方法、修 bug、重构、改 SQL），以及在既有工程里新增业务代码（新 Controller / Service / Mapper / DTO / 接口）。核心是控制编辑半径、保住既有契约、让 diff 可评审：改前读全文并 grep 调用方，改中最小 diff 且不动无关风格，改后编译/测试并给四段交付说明。Use when editing, patching, refactoring, fixing, or adding new business code to an existing Java project — Controller / Service / Manager / DAO / Mapper / DTO-VO / 线程池 / 事务 / SQL / 单元测试，或用户说「改一下 / 加个参数 / 加个接口 / 写个 Service / 修个 bug / 优化这段 / 帮我 review 这个类」。红线（被本次改动触碰到的范围内发现即修，不接受口头豁免）：禁 Executors 任何工厂方法建池（newFixedThreadPool/newCachedThreadPool/newScheduledThreadPool 等，须 new ThreadPoolExecutor 显式参数）、禁 new Thread(...).start() 自建线程、SimpleDateFormat 不得共享（static 字段或单例实例字段，一律改 java.time）、ThreadLocal 用后必须 remove、SQL 禁 ${} 拼接、catch 后不得吞异常、事务异常须回滚、资源须关闭、禁 finally 中 return、数据订正先 select、禁物理删除。另：禁整文件格式化、禁重排 import、禁重命名本次未改到的标识符——这些是 diff 噪声，视为违规。
 agent_created: true
 ---
 
 # Java 编辑守卫
 
-> 这份 skill 不教「怎么从零写一个类」。它管的是**动别人已经写好的 Java 代码时，怎么改才不惹事**：不破坏调用方、不制造 diff 噪声、不把红线带进存量文件、交付时说清楚改了什么。
+> 这份 skill 不教「怎么从零写一个类」。它管的是**在已经有人写过的 Java 工程里写代码时，别把东西动坏**：改存量不破坏调用方，新增业务代码与既有约定对齐，不制造 diff 噪声，不把红线带进仓库，交付时说清楚改了什么。
 
 ## 何时启用
 
 | 场景 | 启用 |
 |---|---|
-| 在现有类里加方法、加参数、加分支、改判断 | ✅ 完整协议 |
+| 在现有类里加方法、加参数、加分支、改判断 | ✅ 完整协议（R2~R3） |
+| **在既有工程里新增业务代码**：新 Controller / Service / Manager / Mapper / DTO / 定时任务 / 新接口 | ✅ 完整协议，R4（§3.1「契约不变」→「契约对齐」；流程见 §11 B1） |
 | 修 bug、改逻辑、改 SQL / Mapper、改 DTO | ✅ 完整协议 |
 | 重构、抽方法、换实现、升级依赖调用 | ✅ 完整协议 |
-| 加接口、改表结构、改公共常量或枚举 | ✅ 完整协议（R4/R5，先给方案） |
+| 改表结构、改公共常量或枚举 | ✅ 完整协议（R5，先给方案） |
 | Review 别人或自己的改动 | ✅ 走 §6 审查视角 |
-| 从零新建文件、新建模块 | 🔸 只用 §5 红线 + `manual/` 对应章节，侦察流程可省 |
-| 一次性脚本、Demo | 🔸 红线仍生效，侦察与报告可简化 |
+| 空目录从零起新项目 | 🔸 按结构条款清单建（§11 B2），不做半径侦察 |
+| 一次性脚本、Demo | 🔸 只保 §5 红线，侦察与报告可简化 |
+
+**「新增」不等于「从零」。** 在既有工程里写一个新 Service，同样是受约束的动作：包放哪一层、抛什么异常、返回怎么包装、事务加在方法还是调用方、日志怎么打——这些不是自由发挥，要和周边代码对齐，否则就是给下一个人留坑。所以这类任务照走完整协议，只是把 §3.1 的「契约不变」换成「契约对齐」：不破坏既有约定、不引入第二套风格。真正的从零项目改用结构条款清单（§11 B2）。
 
 ## 三条铁律
 
-1. **读全再改**——没读完目标文件、没找到调用方，不许落笔。凭片段猜测是编辑事故的第一来源。
+1. **读全再改**——没读完目标文件、没找到调用方，不许落笔；新增文件时改为先读同层 2~3 个同类文件。凭片段猜测是编辑事故的第一来源。
 2. **最小 diff**——只改任务要求的行，加被触碰范围内的 P0 红线。顺手优化、顺带重命名、顺带格式化，一律算违规。
 3. **结论可溯源**——说「规约要求」必须给得出条文编号（如 `01-(七)4【强制】`）。手册没写的，不许包装成手册要求（见 §7）。
 
 ## 1. 编辑半径：先判断这次改动有多大
 
-改之前先定级，半径决定侦察深度与是否要先征求方案。
+改之前先定级，半径决定侦察深度与是否要先征求方案。（新增业务代码不必定级，直接看 §11。）
 
 | 半径 | 触碰范围 | 典型动作 | 改前必做 |
 |---|---|---|---|
@@ -53,6 +56,7 @@ agent_created: true
 **必做（R1 及以上）**
 
 - [ ] 用 `Read` 读目标文件的**完整内容**，不是区间。只看片段会漏掉同类方法、已有工具类、import 冲突。
+- [ ] 新增文件时，先读同层 2~3 个同类类的完整实现，作为包结构、命名、异常、返回包装的样本。
 - [ ] 判断这个类在项目里的角色（Controller / Service / Manager / DAO / DTO），别把业务逻辑写进 Controller（`06-(一)`）。
 
 **R3 及以上**
@@ -87,6 +91,8 @@ agent_created: true
 | 8 | 同步/异步模型、线程池归属 | 上下文丢失、事务失效、线程泄漏 |
 | 9 | 公共常量值、枚举值（库里存的是值，不是名字） | 历史数据错乱 |
 | 10 | 对外 HTTP 路径、参数名、状态码、错误码 | 前端或第三方调用失败 |
+
+**新增文件时，本节叫「契约对齐」。** 没有旧签名要保，但上面这十项要从周边代码里读出来并沿用：同层的类怎么命名、异常怎么抛、返回怎么包装、事务加在方法还是调用方、日志用什么门面、DTO 带不带 `serialVersionUID`。判断标准很简单——**新代码的调用方不应该需要知道「这是新加的」**，用法与既有代码一致。
 
 ### 3.2 红线预检
 
@@ -153,9 +159,9 @@ agent_created: true
 
 | # | 域 | 禁止 | 必须 | 出处 |
 |---|---|---|---|---|
-| 1 | 线程 | `Executors.newFixedThreadPool` / `newCachedThreadPool` / `newSingleThreadExecutor` | `new ThreadPoolExecutor(...)` 显式给出核心数、最大数、存活时间、队列、命名 ThreadFactory、拒绝策略 | `01-(七)4【强制】` |
-| 2 | 线程 | 裸 `new Thread(...)`；用 `Timer` 跑多任务 | 线程资源统一走线程池；定时任务用 `ScheduledExecutorService` | `01-(七)3【强制】`、`01-(七)12【强制】` |
-| 3 | 并发 | `SimpleDateFormat` 作为 static 字段共享 | `java.time` + `DateTimeFormatter`（不可变、线程安全）；必须复用时用 `ThreadLocal` 包装 | `01-(七)5【强制】` |
+| 1 | 线程 | `Executors.newXxx(...)` **任何**工厂方法：`newFixedThreadPool` / `newCachedThreadPool` / `newSingleThreadExecutor` / `newScheduledThreadPool` / `newSingleThreadScheduledExecutor` / `newWorkStealingPool` | `new ThreadPoolExecutor(...)` 显式给出核心数、最大数、存活时间、**有界队列**、命名 ThreadFactory、拒绝策略 | `01-(七)4【强制】` |
+| 2 | 线程 | `new Thread(...).start()` 自己建线程跑任务（`ThreadFactory` 内构造 Thread 是正当写法，不算）；用 `Timer` 跑多任务 | 线程资源统一走线程池；定时任务用 `ScheduledExecutorService` | `01-(七)3【强制】`、`01-(七)12【强制】` |
+| 3 | 并发 | `SimpleDateFormat` 被共享：static 字段，或单例 Bean 的实例字段 | `java.time` + `DateTimeFormatter`（不可变、线程安全）；确需复用 `SimpleDateFormat` 时用 `ThreadLocal` 包装 | `01-(七)5【强制】` |
 | 4 | 并发 | `ThreadLocal` 用完不清理 | `try { ... } finally { tl.remove(); }` | `01-(七)6【强制】` |
 | 5 | 并发 | 共享可变状态（单例字段、缓存 Map）用非线程安全容器 | `ConcurrentHashMap` / `CopyOnWriteArrayList`；注意 `ConcurrentHashMap` 不接受 null 值 | `01-(七)1【强制】`、`01-(六)` 集合对照表 |
 | 6 | 事务 | `catch` 掉异常后继续提交 | 需要回滚时重新抛出，或 `TransactionAspectSupport.currentTransactionStatus().setRollbackOnly()` | `02-(二)5【强制】` |
@@ -207,6 +213,10 @@ agent_created: true
 
 | 你要做的事 | 读这里 |
 |---|---|
+| 只知道要查什么（JWT、索引、分页、线程池…），不知道在哪一章 | `references/manual/index.md`（触发词 → 章节；321 条总览） |
+| 大特性开工前（新增量大、要建表、跨模块） | `references/new-code.md` §1（B0 前置契约）+ `manual/07-design-standards.md` |
+| 新增业务代码（新 Service / Controller / Mapper / DTO） | `references/new-code.md` §2 + `manual/06-project-structure.md` |
+| 空目录从零起项目 | `references/new-code.md` §3 + `manual/06-project-structure.md`、`05-mysql-database.md` |
 | 改方法签名 / 加参数 / 加字段 | `references/playbooks.md` §1、§2 |
 | 改 SQL / Mapper / resultMap | `references/playbooks.md` §3 + `manual/05-mysql-database.md` |
 | 加接口 / 改 DTO-VO / 改分层 | `references/playbooks.md` §4 + `manual/06-project-structure.md` |
@@ -243,7 +253,33 @@ agent_created: true
 
 用户的「其他保持不变」不构成红线豁免，只构成「不要扩大风格改动」的授权。
 
-## 11. 反模式：这些行为直接判不合格
+## 11. 路径 B：新增与从零
+
+§1~§4 是「改」的协议。新增业务代码走这条，共用 §5 红线、§3.3 风格继承、§4.1 验证、§4.3 交付说明。
+
+先分清是哪种新增：**有同层代码可读、有调用链可接 → B1**；**空目录什么都没有 → B2**。
+
+**新增量大时先做 B0**：预计 10 个文件以上、要建表、加对外接口、或跨 3 个以上模块——先产出一页纸（范围与边界 / 契约先行 / 分批 / 验收口径），契约定稿再动手。大特性返工的主因不是写错某一行，而是边写边改契约。
+
+| | B1 既有工程里新增 | B2 空目录从零起项目 |
+|---|---|---|
+| 默认半径 | R4（新类要接进现有链路） | 不适用 |
+| 核心动作 | **对齐**：读样本、接线路 | **定型**：先定分层与契约 |
+| 失败方式 | 风格不一致、漏接线、分层错位 | 结构没定就写业务，整体返工 |
+
+**B1 三步**（细节见 `references/new-code.md`）：
+
+1. **对齐侦察**：读同层 2~3 个类的完整实现，走通一条同类链路，记下六项约定——异常、返回包装、事务位置、日志门面、持久化方式、校验方式；再找出接线点（路由前缀、`@MapperScan` 包范围、配置 key、权限注解）。
+2. **按序建设，每步可编译**：DTO → DO/Mapper → Service 接口 → Impl → Controller → 单测 → 接线自检。先定接口再写实现，避免实现里顺手改契约。
+3. **验收**：把新代码丢进同类文件堆里看不出哪个是新加的；新 Mapper、Bean、配置项、权限点都已接上。
+
+**B2 五件事按顺序定**：分层与包结构（`06-(一)`）→ 依赖与版本（`06-(二)`）→ 数据模型与建表（`05-(一)`）→ 错误码与异常体系（`02-(一)`）→ 测试骨架（`03`）。
+
+B2 的验收不是「写完了」，而是：编译通过、能启动且无 Bean 冲突、一个接口返回 200、一条端到端用例跑通、日志格式与 traceId 符合预期。
+
+新增任务的报告，「没做/风险」重点写**未接的线**：未注册的 Bean、未加的配置、未接的权限、未覆盖的分支。新增代码最常见的故障不是逻辑错，而是没接上。
+
+## 12. 反模式：这些行为直接判不合格
 
 1. 只 `Read` 了 50 行就 `Edit`，没看全文
 2. 改签名前没 `grep` 调用方

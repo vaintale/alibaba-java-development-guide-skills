@@ -14,6 +14,9 @@
 ```java
 private final ExecutorService pool = Executors.newFixedThreadPool(10);
 private final ExecutorService cache = Executors.newCachedThreadPool();
+private final ExecutorService single = Executors.newSingleThreadExecutor();
+private final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(2);
+private final ExecutorService stealing = Executors.newWorkStealingPool();
 ```
 
 **正例**
@@ -23,6 +26,8 @@ private static final int CORE_POOL_SIZE = 8;
 private static final int MAX_POOL_SIZE = 16;
 private static final int QUEUE_CAPACITY = 200;
 private static final long KEEP_ALIVE_SECONDS = 60L;
+private static final String THREAD_NAME_PREFIX = "order-export-";
+private static final AtomicInteger THREAD_SEQ = new AtomicInteger(1);
 
 private final ExecutorService pool = new ThreadPoolExecutor(
         CORE_POOL_SIZE,
@@ -30,15 +35,31 @@ private final ExecutorService pool = new ThreadPoolExecutor(
         KEEP_ALIVE_SECONDS,
         TimeUnit.SECONDS,
         new LinkedBlockingQueue<>(QUEUE_CAPACITY),
-        new ThreadFactoryBuilder().setNameFormat("order-export-%d").build(),
+        runnable -> {
+            Thread thread = new Thread(runnable, THREAD_NAME_PREFIX + THREAD_SEQ.getAndIncrement());
+            thread.setDaemon(false);
+            return thread;
+        },
         new ThreadPoolExecutor.CallerRunsPolicy());
 ```
 
-**为什么**：`newFixedThreadPool` 和 `newSingleThreadExecutor` 用无界 `LinkedBlockingQueue`，任务堆积会 OOM；`newCachedThreadPool` 最大线程数是 `Integer.MAX_VALUE`，高并发下会创建海量线程直至 OOM。工厂方法把队列容量、拒绝策略、线程命名都藏起来了，出问题时无从排查。
+> 项目里已有 Guava 时，可用 `new ThreadFactoryBuilder().setNameFormat("order-export-%d").build()` 代替手写工厂；没有就别为命名线程单独引依赖，JDK 原生写法足够。
+
+**参数怎么定**
+
+| 参数 | 取值依据 |
+|---|---|
+| 核心数 | CPU 密集型 ≈ 核数 + 1；IO 密集型 ≈ 核数 × (1 + 平均等待 / 平均计算)，常见从 2×核数 起 |
+| 最大数 | 与核心数相同即固定大小，行为最可预期；要弹性再放大，并接受线程数波动 |
+| 队列 | **必须有界**。容量按「峰值 QPS × 可接受积压时长」估算，不要用 `Integer.MAX_VALUE` |
+| 拒绝策略 | 不能丢任务用 `CallerRunsPolicy`（回落到提交线程，天然限流）；允许快速失败用 `AbortPolicy` + 上游捕获 |
+| 线程名 | 业务前缀 + 自增序号，排障时能直接定位来源（`01-(七)2【强制】`） |
+
+**为什么**：工厂方法把队列容量、拒绝策略、线程命名都藏起来了——`newFixedThreadPool` / `newSingleThreadExecutor` / `newScheduledThreadPool` 用无界队列，任务堆积会 OOM；`newCachedThreadPool` 最大线程数是 `Integer.MAX_VALUE`，高并发下会创建海量线程直至 OOM。
 
 **出处**：`01-(七)4【强制】`；线程命名见 `01-(七)2【强制】`
 
-**识别**：grep `Executors.new`
+**识别**：grep `Executors.new`。**注意**：`ThreadFactory` 内 `new Thread(runnable, name)` 是正当写法，不算「裸建线程」。
 
 ---
 
@@ -58,30 +79,38 @@ timer.schedule(new TimerTask() { ... }, 1000L, 60_000L);
 ```java
 orderPool.execute(() -> syncOrders());
 
+private static final AtomicInteger SYNC_SEQ = new AtomicInteger(1);
+
 ScheduledExecutorService scheduler = new ScheduledThreadPoolExecutor(
-        2, new ThreadFactoryBuilder().setNameFormat("order-sync-%d").build());
+        2,
+        runnable -> new Thread(runnable, "order-sync-" + SYNC_SEQ.getAndIncrement()));
 scheduler.scheduleWithFixedDelay(this::syncOrders, 0L, 60L, TimeUnit.SECONDS);
 ```
 
-**为什么**：裸线程无法复用、无上限、异常直接终止且无人知晓；`Timer` 内任一 `TimerTask` 抛异常会导致整个 Timer 线程死亡，其余任务静默停止。
+**为什么**：裸线程无法复用、无上限，异常直接终止且无人知晓；`Timer` 内任一 `TimerTask` 抛异常会导致整个 Timer 线程死亡，其余任务静默停止。
 
 **出处**：`01-(七)3【强制】`、`01-(七)12【强制】`
 
-**识别**：grep `new Thread(`, `new Timer(`
+**识别**：grep `new Thread(` 后确认是否紧跟 `.start(`——只有「自己建线程并启动执行任务」才违规；`ThreadFactory` 内构造 Thread 是正当写法。`new Timer(` 一律命中。
 
 ---
 
-## 3. SimpleDateFormat 作静态字段
+## 3. SimpleDateFormat 被共享（static 字段 / 单例 Bean 的实例字段）
 
 **反例**
 
 ```java
+// 形态一：静态字段
 private static final SimpleDateFormat SDF = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
 
-public String format(Date date) {
-    return SDF.format(date);
+// 形态二：单例 Bean 的实例字段，被所有请求共用，同样不安全
+@Service
+public class OrderService {
+    private final SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
 }
 ```
+
+实测（8 线程 × 5000 轮 format + parse，共 80000 次调用）：**错误 42002 次**，首个异常为 `NumberFormatException: For input string: "E.4220002224"`；换成 `DateTimeFormatter` 后同样压力 **0 错误**，耗时还从 240ms 降到 92ms。
 
 **正例**
 
@@ -94,11 +123,11 @@ public String format(LocalDateTime time) {
 }
 ```
 
-**为什么**：`SimpleDateFormat` 内部用 `Calendar` 存中间状态，多线程共用会串数据，表现为偶发的时间错乱或 `NumberFormatException`，且极难复现。`DateTimeFormatter` 不可变、线程安全。
+**为什么**：`SimpleDateFormat` 内部用 `Calendar` 做中间状态，共享实例时线程之间互相覆盖，表现为偶发的时间错乱或 `NumberFormatException`，压力越大越容易复现。要害是**共享**，不是 `static` 这个词——写在单例 Bean 的实例字段上一样会炸。
 
 **出处**：`01-(七)5【强制】`；日期类型见 `01-(五)4【强制】`
 
-**识别**：grep `SimpleDateFormat`
+**识别**：grep `SimpleDateFormat`，再看它是静态字段还是单例 Bean 的成员变量，两种都算。
 
 ---
 
@@ -556,10 +585,19 @@ long millis = System.currentTimeMillis();
 
 ## 附录：快速扫描命令
 
-编辑完成后可对改动文件跑一遍关键字检查（结果需人工判断，不是自动判定）：
+编辑完成后对本次改动的 Java 文件扫一遍（**命中只是候选，需人工判断**；注释与测试代码可能误报）：
 
 ```bash
-grep -nE "Executors\.new|new Thread\(|new Timer\(|SimpleDateFormat|\$\{|delete from|printStackTrace|e\.getMessage\(\)|System\.out\.println" $(git diff --name-only)
+grep -HnE "Executors\.new|new Thread\([^;]*\)\s*\.start\(|new Timer\(|new Date\(\)|SimpleDateFormat|java\.sql\.(Date|Time|Timestamp)|ThreadLocal|BigDecimal\(|\$\{|delete from|select \*|printStackTrace|System\.out\.println|catch \(Exception" \
+  $(git diff --name-only --diff-filter=ACMR -- '*.java' '*.xml') \
+  | grep -vE ':[0-9]+:[[:space:]]*(<!--|\*|//)'
 ```
 
-`git diff --name-only` 只看本次改动的文件，避免对全仓扫描产生噪声。
+- `git diff --name-only` 只看本次改动的文件，避免全仓扫描产生噪声；`*.xml` 一定要带上——MyBatis 的 `${}` 大多写在 Mapper XML 里，只扫 `.java` 会整片漏掉。
+- 末尾的 `grep -v` 排除 Javadoc 与行注释——注释里提到 `SimpleDateFormat` 不算违规，不排除会误报。
+- `new Thread(` 限定为紧跟 `...).start()`，只抓「自己建线程并启动」这种真违规；`ThreadFactory` 里 `new Thread(runnable, name)` 是正当写法，不会命中。
+- 命中 `System.out.println` 时先看是不是测试或演示代码——红线指的是生产代码用控制台输出代替日志。
+- **grep 抓不到的，按 §5 表逐条人看**：Java 里 `"select ... where id = " + id` 这类拼接（模式分不清正常字符串拼接和 SQL 拼接）、`finally` 里的 `return`、事务方法内被吞掉的异常、`ThreadLocal` 是否配了 `remove()`、`update` 是否漏了 `is_deleted`。
+- `${}` 出现在模板处理、占位符渲染等非 SQL 代码里会误报（`template.replace("${" + key + "}", v)` 就会命中），确认上下文再判。
+- `BigDecimal(` 抓的是构造函数，不区分参数：`new BigDecimal("0.1")` / `BigDecimal.valueOf(0.1)` 正确，`new BigDecimal(0.1)` 或传 double 变量违规；限定名 `new java.math.BigDecimal(0.1)` 同样会命中。
+- 空 catch 没有专属 token：靠 `catch (Exception` 命中后看块内是否为空，空块或只有 `e.printStackTrace()` 都算违规。

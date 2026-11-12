@@ -1,2 +1,10 @@
-/alibaba-java-development-guide-main
 /.workbuddy
+
+# 本地私有数据：真实项目画像等，不进仓库
+/.local
+
+# 项目画像属于本地运行数据：含内部模块名、构建命令、库表与类名，不随仓库公开
+/java-edit-guard/project/*.md
+!/java-edit-guard/project/README.md
+!/java-edit-guard/project/_template.md
+!/java-edit-guard/project/_example.md
