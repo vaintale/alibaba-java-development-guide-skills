@@ -1,8 +1,11 @@
 id: date-time-api
 title: 日期时间应使用 java.time 而非 Date/SimpleDateFormat
 description: |
-  阿里规约：强制使用 java.time 下的 LocalDateTime/LocalDate，
-  避免 Date、SimpleDateFormat（非线程安全）。
+  团队约定（非《Java 开发手册》强制条文）：日期时间统一使用 java.time 下的
+  LocalDateTime / LocalDate + DateTimeFormatter，避免 java.util.Date、SimpleDateFormat。
+  手册相关依据：01-(五)3【强制】禁 new Date().getTime() 取毫秒；
+  01-(五)4【强制】禁 java.sql.Date / Time / Timestamp；01-(七)5【强制】SimpleDateFormat 不得共享。
+  团队在此基础上收紧为不使用 java.util.Date，判定口径见 judge.success。
 input:
   prompt: |
     用 Java 写一个工具类 DateUtils，提供方法：

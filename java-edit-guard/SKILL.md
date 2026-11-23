@@ -214,24 +214,24 @@ agent_created: true
 | 你要做的事 | 读这里 |
 |---|---|
 | 只知道要查什么（JWT、索引、分页、线程池…），不知道在哪一章 | `references/manual/index.md`（触发词 → 章节；321 条总览） |
-| 大特性开工前（新增量大、要建表、跨模块） | `references/new-code.md` §1（B0 前置契约）+ `manual/07-design-standards.md` |
-| 新增业务代码（新 Service / Controller / Mapper / DTO） | `references/new-code.md` §2 + `manual/06-project-structure.md` |
-| 空目录从零起项目 | `references/new-code.md` §3 + `manual/06-project-structure.md`、`05-mysql-database.md` |
+| 大特性开工前（新增量大、要建表、跨模块） | `references/new-code.md` §1（B0 前置契约）+ `references/manual/07-design-standards.md` |
+| 新增业务代码（新 Service / Controller / Mapper / DTO） | `references/new-code.md` §2 + `references/manual/06-project-structure.md` |
+| 空目录从零起项目 | `references/new-code.md` §3 + `references/manual/06-project-structure.md`、`references/manual/05-mysql-database.md` |
 | 改方法签名 / 加参数 / 加字段 | `references/playbooks.md` §1、§2 |
-| 改 SQL / Mapper / resultMap | `references/playbooks.md` §3 + `manual/05-mysql-database.md` |
-| 加接口 / 改 DTO-VO / 改分层 | `references/playbooks.md` §4 + `manual/06-project-structure.md` |
-| 改并发 / 线程池 / 锁 | `references/playbooks.md` §5 + `manual/01-coding-standards.md`（七） |
-| 加事务 / 改事务边界 | `references/playbooks.md` §6 + `manual/02-exception-logging.md`（二） |
-| 加日志 / 改异常处理 | `references/playbooks.md` §7 + `manual/02-exception-logging.md` |
+| 改 SQL / Mapper / resultMap | `references/playbooks.md` §3 + `references/manual/05-mysql-database.md` |
+| 加接口 / 改 DTO-VO / 改分层 | `references/playbooks.md` §4 + `references/manual/06-project-structure.md` |
+| 改并发 / 线程池 / 锁 | `references/playbooks.md` §5 + `references/manual/01-coding-standards.md`（七） |
+| 加事务 / 改事务边界 | `references/playbooks.md` §6 + `references/manual/02-exception-logging.md`（二） |
+| 加日志 / 改异常处理 | `references/playbooks.md` §7 + `references/manual/02-exception-logging.md` |
 | 加缓存 / 改配置 / 改枚举常量 | `references/playbooks.md` §8 |
-| 补单元测试 | `references/playbooks.md` §9 + `manual/03-unit-testing.md` |
+| 补单元测试 | `references/playbooks.md` §9 + `references/manual/03-unit-testing.md` |
 | 红线具体反例与改法 | `references/redlines.md` |
 | 交付前自检、diff 噪声排查 | `references/diff-review.md` |
 | 写交付说明 | `references/report-template.md` |
-| 命名、常量、格式、OOP、集合、控制语句、注释 | `manual/01-coding-standards.md` 对应小节 |
-| 安全（越权 / 脱敏 / 上传 / 重放） | `manual/04-security-standards.md` |
-| 设计（分层 / 依赖 / 降级） | `manual/07-design-standards.md` |
-| 名词、错误码全表 | `manual/08-appendix.md` |
+| 命名、常量、格式、OOP、集合、控制语句、注释 | `references/manual/01-coding-standards.md` 对应小节 |
+| 安全（越权 / 脱敏 / 上传 / 重放） | `references/manual/04-security-standards.md` |
+| 设计（分层 / 依赖 / 降级） | `references/manual/07-design-standards.md` |
+| 名词、错误码全表 | `references/manual/08-appendix.md` |
 
 ## 9. 项目画像与个人偏好
 
@@ -291,6 +291,54 @@ B2 的验收不是「写完了」，而是：编译通过、能启动且无 Bean
 8. 顺手把相邻代码重命名 / 格式化 / 换写法
 9. 报告只写「已完成」，不写验证结果和影响面
 10. 把「手册没写」的规则说成「阿里规约要求」
+
+## 13. Google Java Style Guide 补充约束（冲突时阿里优先）
+
+基线仍是《Java 开发手册（黄山版）》v1.7.1。Google Java Style Guide 只补充手册未覆盖、且不与现有约束冲突的项。以下冲突项按用户决策**一律以阿里为准，不采纳 Google**：4 空格缩进（非 2）、单行 120 字符（非 100）、续行相对首行 +4 且第三行起不再追加缩进、switch case +4；JUnit 测试方法不用下划线分段；`static final` 一律全大写；`@Override` 必须加（父类 `@Deprecated` 可省略的例外不采纳）；空 `catch` 仍属 P0；Javadoc 只用 `/** */`、类必须有 `@author`/`@date`，不引入 `///`、不强制 visible 成员覆盖；TODO 格式仍按 `01-(九)12`。
+
+以下新增项**只约束本次新写代码**；存量文件按 §3.3 风格继承，不顺手改格式。
+
+### 13.1 源文件与 import
+
+- 一个源文件只有一个顶层类；顺序为 license/copyright（若有）→ package → imports → 类声明，每段之间一个空行。
+- `package` 声明与 `import` 不换行，不受行宽限制。
+- 不用通配符 import（`import xxx.*`），static 与非 static 都不用；import 不换行。
+- import 分两组：static 一组、非 static 一组，组间一个空行；组内按 imported name 的 ASCII 序排列（注意 `.` 排在 `;` 前）；不静态导入静态嵌套类。
+- 存量文件已有的通配符 import 或排序不因本次改动顺手调整（§3.3）。
+
+### 13.2 格式补充
+
+- 每条语句独占一行；变量声明一次只声明一个变量（`int a, b;` 禁止，`for` 头部例外）。
+- 局部变量就近声明，声明即初始化或随后立即初始化，不习惯性堆在块首。
+- 数组声明写 `String[] args`，不写 `String args[]`。
+- 特殊转义序列优先于八进制/Unicode 等价写法（`\b \t \n \f \r \" \' \\`）；非 ASCII 字符可直接写实际字符或等价 Unicode 转义，但字符串和注释之外避免 Unicode 转义。
+- 运算符优先级不显然时加括号，不假设读者记得优先级表。
+- 文本块的 `"""` 开始符与结束符各占一行、同缩进；块内每行至少与分隔符同缩进；文本内容不受行宽限制。
+- switch 表达式必须用箭头（`->`）新语法；switch 必须穷尽，未覆盖分支补 `default`。旧式 switch 的 fall-through 仍须注释（与 `01-(八)1` 一致）。
+- 修饰符按 JLS 顺序：`public protected private abstract default static final sealed non-sealed transient volatile synchronized native strictfp`。
+- 类/包/模块/方法/构造器上的多个注解每个单独一行；单个无参注解可与签名首行同行（如 `@Override`）；字段注解可同行；类型注解紧贴被注解类型。
+- `if/else`、`try/catch/finally` 多块语句中不允许空 catch（与 §5 红线一致）。
+
+### 13.3 命名补充
+
+- 缩写按普通单词处理：先全小写，再按驼峰规则首字母大写。写 `XmlHttpRequest`、`newCustomerId`、`supportsIpv6OnIos`，不写 `XMLHTTPRequest`、`newCustomerID`、`supportsIPv6OnIOS`。这与 `01-(一)12`「杜绝不规范缩写」一致。
+- 方法名用动词或动词短语，仍为 lowerCamelCase（与 `01-(一)5` 一致）。
+- 泛型类型变量用单个大写字母可跟一位数字（`T`、`E`、`X`、`T2`），或 UpperCamelCase + `T`（`RequestT`、`FooBarT`）。
+- 允许未命名变量 `_`（如 `_ -> true`），不改变参数仍需 lowerCamelCase 的要求。
+
+### 13.4 编程实践补充
+
+- 静态成员必须 `Class.staticMember` 形式访问（与 `01-(四)1` 一致）。
+- 不覆写 `Object.finalize()`（Finalization 已计划移除）。
+- 空 catch 按 §5 红线处理：记日志并转译；Google「注释说明后可忽略」不采纳。
+- `@Override` 必须加（与 `01-(四)2` 一致）；Google 对 `@Deprecated` 父方法的例外不采纳。
+
+### 13.5 明确不采纳的 Google 项（保留阿里口径）
+
+- 2 空格缩进、100 字符行宽、续行缩进可变化、switch +2。
+- JUnit 测试方法下划线分段；POJO 布尔字段加 `is` 前缀；包名每节多词或用数字；mutable `static final` 小写。
+- `///` Markdown Javadoc、visible 成员强制 Javadoc、Javadoc 摘要短句与块标签顺序、取消 `@author/@date`。
+- Google 风格 TODO（`TODO: url - reason`）替代阿里 `TODO(标记人, 标记时间, [预计处理时间])`。
 
 ---
 
