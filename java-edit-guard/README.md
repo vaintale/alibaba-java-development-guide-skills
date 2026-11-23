@@ -68,11 +68,13 @@ Skill 里每一条强制要求都写得出原文编号。社区流传但与黄�
 | 双重检查锁必须 `volatile` | `01-(七)16` 是【推荐】，不是【强制】 |
 | `update`/`delete` 必须带 `where` | 手册无此原文，相近的是「订正先 select」「禁物理删除」 |
 
+另有 Google Java Style Guide 作为补充（`SKILL.md` §13）：只取手册未覆盖且不冲突的项；冲突一律以阿里为准（4 空格缩进、120 字符行宽、注释与异常口径等）。团队约定（如日期时间统一 `java.time`、禁 `java.util.Date`）按来源标注，不冒充手册强制条文。
+
 ## 三、目录结构
 
 ```
 java-edit-guard/
-├── SKILL.md                        # 主协议：半径分级 / 改前侦察 / 改中约束 / 改后验证 / 红线表
+├── SKILL.md                        # 唯一协议：半径分级 / 改前侦察 / 改中约束 / 改后验证 / 红线表
 ├── memory.md                       # 个人编辑偏好
 ├── evals/                          # 10 个 skill-up 评测用例 + 评分脚本
 ├── references/
@@ -88,7 +90,11 @@ java-edit-guard/
     └── _example.md                 # 虚构示例；真实 <项目名>.md 本地保存，不入公开仓库
 ```
 
-## 四、安装
+## 四、安装与跨机器同步
+
+本 Skill 是**单层结构**：只有一个协议 `SKILL.md` + `references/`。命中 Java 编辑任务后，宿主按 skill 的 `description` 加载它；没有常驻路由层，也不往仓库或具体 Java 项目投放规则文件。
+
+### 1. 安装到当前机器
 
 **WorkBuddy**：把整个 `java-edit-guard/` 目录放到 `~/.workbuddy/skills/` 下。
 
@@ -98,6 +104,23 @@ java-edit-guard/
 mkdir -p ~/.claude/skills
 cp -r java-edit-guard ~/.claude/skills/
 ```
+
+安装后在 Java 项目里直接说需求即可，触发与细则都由 `SKILL.md` 承担。
+
+### 2. 跨机器同步
+
+本 Skill 只在你自己的多台电脑上使用，不为同事/CI 分发。同步方式：
+
+```bash
+git clone <你的仓库地址>
+cp -r java-edit-guard ~/.workbuddy/skills/
+```
+
+更新时重新同步 `java-edit-guard/` 即可，但**保留安装侧本地的 `project/*.md`**（如 `project/topology-server.md`）——这些是你的本机项目画像，不入库、也不跨机器共享；这是已知且接受的现状，Skill 在文件不存在时会跳过。
+
+### 3. 验证是否生效
+
+安装后改一个 Java 文件，观察三点：是否先读完整文件、是否 grep 调用方、是否给出四段交付说明。缺一即 skill 未被加载。
 
 安装后在 Java 项目里直接说需求即可，例如：
 
